@@ -1,4 +1,14 @@
-= BOLT #3: Bitcoin Transaction and Script Formats =
+<pre>
+  BIP: 203
+  Title: BOLT 3: Bitcoin Transaction and Script Formats
+  Author: Rusty Russell <rusty@rustcorp.com.au>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0203
+  Status: Draft
+  Type: Standards Track
+  Created: 2016-11-15
+  License: CC-BY-4.0
+</pre>
 
 This details the exact format of on-chain transactions, which both sides need to agree on to ensure signatures are valid. That is, the funding transaction output script, commitment transactions and the HTLC transactions.
 

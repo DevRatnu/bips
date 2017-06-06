@@ -1,4 +1,14 @@
-= BOLT #0: Introduction and Index =
+<pre>
+  BIP: 200
+  Title: BOLT 0: Introduction and Index
+  Author: Rusty Russell <rusty@rustcorp.com.au>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0200
+  Status: Draft
+  Type: Standards Track
+  Created: 2016-11-15
+  License: CC-BY-4.0
+</pre>
 
 Welcome, friend! These Basis of Lightning Technology (BOLT) documents describe a layer-2 protocol for off-chain bitcoin transfer by mutual cooperation, relying on on-chain transactions for enforcement if necessary.
 

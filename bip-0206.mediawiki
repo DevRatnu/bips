@@ -1,4 +1,14 @@
-= Interim Node and Channel Discovery =
+<pre>
+  BIP: 206
+  Title: BOLT 6: Interim Node and Channel Discovery
+  Author: Christian Decker <decker.christian@gmail.com>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0206
+  Status: Draft
+  Type: Standards Track
+  Created: 2016-11-14
+  License: CC-BY-4.0
+</pre>
 
 This specification describes the provisorial node and channel discovery using IRC. It will eventually be superseded by a discovery mechanism that does not rely on a centralized server for communication.
 

@@ -1,4 +1,15 @@
-= BOLT #8: Encrypted and Authenticated Transport =
+<pre>
+  BIP: 208
+  Title: BOLT 8: Encrypted and Authenticated Transport
+  Author: Christian Decker <decker.christian@gmail.com>
+          Rusty Russell <rusty@rustcorp.com.au>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0208
+  Status: Draft
+  Type: Standards Track
+  Created: 2016-11-30
+  License: CC-BY-4.0
+</pre>
 
 All communications between Lightning nodes is encrypted in order to provide confidentiality for all transcripts between nodes, and authenticated to avoid malicious interference. Each node has a known long-term identifier which is a public key on Bitcoin's <code>secp256k1</code> curve. This long-term public key is used within the protocol to establish an encrypted+authenticated connection with peers, and also to authenticate any information advertised on behalf of a node.
 

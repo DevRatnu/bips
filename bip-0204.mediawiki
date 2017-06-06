@@ -1,4 +1,15 @@
-= BOLT #4: Onion Routing Protocol =
+<pre>
+  BIP: 204
+  Title: BOLT 4: Onion Routing Protocol
+  Author: Christian Decker <decker.christian@gmail.com>
+          Rusty Russell <rusty@rustcorp.com.au>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0204
+  Status: Draft
+  Type: Standards Track
+  Created: 2016-11-15
+  License: CC-BY-4.0
+</pre>
 
 == Overview ==
 

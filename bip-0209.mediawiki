@@ -1,4 +1,14 @@
-= BOLT #9: Assigned Feature Flags =
+<pre>
+  BIP: 209
+  Title: BOLT 9: Assigned Feature Flags
+  Author: Rusty Russell <rusty@rustcorp.com.au>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0209
+  Status: Draft
+  Type: Standards Track
+  Created: 2017-02-07
+  License: CC-BY-4.0
+</pre>
 
 This document tracks the assignment of <code>localfeatures</code> and <code>globalfeatures</code> flags in the <code>init</code> message ([[bip-0201.mediawiki|BOLT #1]]), as well as the <code>features</code> field in the <code>channel_announcement</code> message and <code>node_announcement</code> message ([[bip-0207.mediawiki|BOLT #7]]). They are tracked separately since new flags will likely be added over time.
 

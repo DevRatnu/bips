@@ -1,4 +1,16 @@
-= BOLT #1: Base Protocol =
+<pre>
+  BIP: 201
+  Title: BOLT 1: Base Protocol
+  Author: Christian Decker <decker.christian@gmail.com>
+          Olaoluwa Osuntokun <laolu32@gmail.com>
+          Rusty Russell <rusty@rustcorp.com.au>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0201
+  Status: Draft
+  Type: Standards Track
+  Created: 2016-11-15
+  License: CC-BY-4.0
+</pre>
 
 == Overview ==
 

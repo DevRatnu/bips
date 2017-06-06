@@ -1,4 +1,14 @@
-= BOLT #5: Recommendations for On-chain Transaction Handling =
+<pre>
+  BIP: 205
+  Title: BOLT 5: Recommendations for On-chain Transaction Handling
+  Author: Rusty Russell <rusty@rustcorp.com.au>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-0205
+  Status: Draft
+  Type: Standards Track
+  Created: 2016-11-15
+  License: CC-BY-4.0
+</pre>
 
 == Abstract ==
 
