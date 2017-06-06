@@ -2,7 +2,7 @@
 
 ## Overview
 This protocol assumes an underlying authenticated and ordered transport mechanism that takes care of framing individual messages.
-[BOLT #8](08-transport.md) specifies the canonical transport layer used in Lightning, though it can be replaced by any transport that fulfills the above guarantees.
+[BOLT #8](bip-0208.mediawiki) specifies the canonical transport layer used in Lightning, though it can be replaced by any transport that fulfills the above guarantees.
 
 The default TCP port is 9735. This corresponds to hexadecimal `0x2607`, the Unicode code point for LIGHTNING.<sup>[1](#reference-1)</sup>
 
@@ -43,9 +43,9 @@ A node MUST fail the channels if it receives a message of unknown type, if that 
 The messages are grouped logically into 4 groups by their most significant set bit:
 
  - Setup & Control (types `0`-`31`): messages related to connection setup, control, supported features, and error reporting. These are described below.
- - Channel (types `32`-`127`): comprises messages used to setup and tear down micropayment channels. These are described in [BOLT #2](02-peer-protocol.md).
- - Commitment (types `128`-`255`): comprises messages related to updating the current commitment transaction, which includes adding, revoking, and settling HTLCs, as well as updating fees and exchanging signatures. These are described in [BOLT #2](02-peer-protocol.md).
- - Routing (types `256`-`511`): node and channel announcements, as well as any active route exploration. These are described in [BOLT #7](07-routing-gossip.md).
+ - Channel (types `32`-`127`): comprises messages used to setup and tear down micropayment channels. These are described in [BOLT #2](bip-0202.mediawiki).
+ - Commitment (types `128`-`255`): comprises messages related to updating the current commitment transaction, which includes adding, revoking, and settling HTLCs, as well as updating fees and exchanging signatures. These are described in [BOLT #2](bip-0202.mediawiki).
+ - Routing (types `256`-`511`): node and channel announcements, as well as any active route exploration. These are described in [BOLT #7](bip-0207.mediawiki).
 
 The size of the message is required to fit into a 2 byte unsigned int by the transport layer, therefore the maximum possible size is 65535 bytes.
 A node MUST ignore any additional data within a message, beyond the length it expects for that type.
@@ -75,7 +75,7 @@ a buffer with 6 bytes of pre-padding.
 ### The `init` message
 Once authentication is complete, the first message reveals the features supported or required by this node, even if this is a reconnection.
 
-[BOLT #9](09-features.md) specifies lists of global and local features. Each feature is generally represented in `globalfeatures` or `localfeatures` by 2 bits.  The least-significant bit is numbered 0, which is even, and the next most significant bit is numbered 1, which is odd.
+[BOLT #9](bip-0209.mediawiki) specifies lists of global and local features. Each feature is generally represented in `globalfeatures` or `localfeatures` by 2 bits.  The least-significant bit is numbered 0, which is even, and the next most significant bit is numbered 1, which is odd.
 
 Both fields `globalfeatures` and `localfeatures` MUST be padded to bytes with zeros.
 
@@ -95,11 +95,11 @@ connection.
 The sending node SHOULD use the minimum lengths required to represent
 the feature fields.  
 
-The sender MUST set feature bits as defined in [BOLT #9](09-features.md),
+The sender MUST set feature bits as defined in [BOLT #9](bip-0209.mediawiki),
 and MUST set to zero any feature bits that are not defined.
 
 The receiver MUST respond to known feature bits as specified in
-[BOLT #9](09-features.md).  For unknown feature bits which are
+[BOLT #9](bip-0209.mediawiki).  For unknown feature bits which are
 non-zero, the receiver MUST ignore the bit if the bit number is odd,
 and MUST fail the connection if the bit number is even.
 
@@ -226,7 +226,7 @@ typical exchanges, without applying any true updates to their respective
 channels. 
 
 When combined with the onion routing protocol defined in
-[BOLT #4](https://github.com/lightningnetwork/lightning-rfc/blob/master/04-onion-routing.md),
+[BOLT #4](bip-0204.mediawiki),
 careful statistically driven synthetic traffic can serve to further bolster the
 privacy of participants within the network.
 
@@ -236,7 +236,7 @@ of incoming traffic flooding (eg. sending odd unknown message types, or padding
 every message maximally).
 
 Finally, the usage of periodic `ping` messages serves to promote frequent key
-rotations as specified within [BOLT #8](https://github.com/lightningnetwork/lightning-rfc/blob/master/08-transport.md).
+rotations as specified within [BOLT #8](bip-0208.mediawiki).
 
 
 ## Acknowledgments

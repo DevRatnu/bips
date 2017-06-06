@@ -1,6 +1,6 @@
 # BOLT #9: Assigned Feature Flags
 
-This document tracks the assignment of `localfeatures` and `globalfeatures` flags in the `init` message ([BOLT #1](01-messaging.md)), as well as the `features` field in the `channel_announcement` message and `node_announcement` message ([BOLT #7](07-routing-gossip.md)).
+This document tracks the assignment of `localfeatures` and `globalfeatures` flags in the `init` message ([BOLT #1](bip-0201.mediawiki)), as well as the `features` field in the `channel_announcement` message and `node_announcement` message ([BOLT #7](bip-0207.mediawiki)).
 They are tracked separately since new flags will likely be added over time.
 
 The `features` flags in the routing messages are a subset of the `globalfeatures` flags, since the `localfeatures` are by definition only of interest to direct peers.
@@ -17,7 +17,7 @@ These flags may only be used in the `init` message:
 
 | Bits | Name             |Description                                     | Link                                                                |
 |------|------------------|------------------------------------------------|---------------------------------------------------------------------|
-| 3  | `initial_routing_sync` | The sending node needs a complete routing information dump | [BOLT #7](07-routing-gossip.md#initial-sync) |
+| 3  | `initial_routing_sync` | The sending node needs a complete routing information dump | [BOLT #7](bip-0207.mediawiki#initial-sync) |
 
 ## Assigned `globalfeatures` flags
 

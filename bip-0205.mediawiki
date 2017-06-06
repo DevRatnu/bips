@@ -6,7 +6,7 @@ Lightning allows for two parties (A and B) to make transactions off-chain, by bo
 
 There are three ways a channel can end:
 
-1. The good way (*mutual close*): at some point A and B agree on closing the channel, they generate a *closing transaction* (which is similar to a *commitment transaction* without any pending payments), and publish it on the blockchain (see [BOLT #2: Channel Close](02-peer-protocol.md#channel-close)).
+1. The good way (*mutual close*): at some point A and B agree on closing the channel, they generate a *closing transaction* (which is similar to a *commitment transaction* without any pending payments), and publish it on the blockchain (see [BOLT #2: Channel Close](bip-0202.mediawiki#channel-close)).
 2. The bad way (*unilateral close*): something goes wrong, without necessarily any evil intent on either side (maybe one party crashed, for instance). Anyway, one side publishes its latest *commitment transaction*.
 3. The ugly way (*revoked transaction close*): one of the parties deliberately tries to cheat by publishing an outdated version of its *commitment transaction* (presumably one that was more in her favor).
 
@@ -95,7 +95,7 @@ A and B each hold a *commitment transaction*, which has 4 types of outputs:
 As an incentive for A and B to cooperate, an `OP_CHECKSEQUENCEVERIFY` relative timeout encumbers A's outputs in A's *commitment transaction*, and B's outputs in B's *commitment transaction*. If A publishes its commitment transaction, she won't be able to get her funds immediately but B will. As a consequence, A and B's *commitment transactions* are not identical, they are (usually) symmetrical.
 
 
-See [BOLT #3: Commitment Transaction](03-transactions.md#commitment-transaction) for more details.
+See [BOLT #3: Commitment Transaction](bip-0203.mediawiki#commitment-transaction) for more details.
 
 
 # Failing A Channel
@@ -103,7 +103,7 @@ See [BOLT #3: Commitment Transaction](03-transactions.md#commitment-transaction)
 Various error cases involve closing a channel, and this can be done in
 several ways; the most efficient is preferred.  Note that there are
 requirements around sending the error message to the peer in
-[BOLT #1: The `error` message](01-messaging.md#the-error-message).
+[BOLT #1: The `error` message](bip-0201.mediawiki#the-error-message).
 
 ## Requirements
 
@@ -142,7 +142,7 @@ A mutual close transaction *resolves* the funding transaction output.
 
 
 A node doesn't need to do anything else as it has already agreed to the
-output, which is sent to its specified `scriptpubkey` (see [BOLT #2: Closing initiation: `shutdown`](02-peer-protocol.md#closing-initiation-shutdown)).
+output, which is sent to its specified `scriptpubkey` (see [BOLT #2: Closing initiation: `shutdown`](bip-0202.mediawiki#closing-initiation-shutdown)).
 
 
 # Unilateral Close Handling
@@ -363,7 +363,7 @@ The node MAY use a single transaction to *resolve* all the outputs, but MUST han
 
 A single transaction which resolves all the outputs will be under the
 standard size limit thanks to the 511 HTLC-per-party limit (see
-[BOLT #2](02-peer-protocol.md#the-open_channel-message)).
+[BOLT #2](bip-0202.mediawiki#the-open_channel-message)).
 
 Note that if a single transaction is used, it may be invalidated as B
 broadcasts HTLC-timeout and HTLC-success transactions, but the
@@ -418,7 +418,7 @@ that speed cannot be considered critical.
 
 ## Expected weight of the `to_local` penalty transaction witness
 
-As described in [BOLT #3](03-transactions.md), the witness for
+As described in [BOLT #3](bip-0203.mediawiki), the witness for
 this transaction is:
 
     <sig> 1 { OP_IF <key> OP_ELSE to_self_delay OP_CSV OP_DROP <key> OP_ENDIF OP_CHECKSIG }
@@ -450,7 +450,7 @@ The *expected weight* is calculated as follows:
     
 ## Expected weight of the offered-htlc penalty transaction witness
 
-The *expected weight* is calculated as follows (some calculations have already been made in [BOLT #3](03-transactions.md)):
+The *expected weight* is calculated as follows (some calculations have already been made in [BOLT #3](bip-0203.mediawiki)):
 
     offered_htlc_script: 133 bytes
 		
@@ -466,7 +466,7 @@ The *expected weight* is calculated as follows (some calculations have already b
       
 ## Expected weight of the received-htlc penalty transaction witness
 
-The *expected weight* is calculated as follows (some calculations have already been made in [BOLT #3](03-transactions.md)):
+The *expected weight* is calculated as follows (some calculations have already been made in [BOLT #3](bip-0203.mediawiki)):
 
     accepted_htlc_script: 139 bytes
 		

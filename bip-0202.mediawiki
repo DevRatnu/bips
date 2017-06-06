@@ -36,7 +36,7 @@ followed by the responding node sending `accept_channel`. With the
 channel parameters locked in, the funder is able to create the funding
 transaction and both versions of the commitment transaction as described in
 [BOLT
-03](https://github.com/lightningnetwork/lightning-rfc/blob/master/03-transactions.md#bolt-3-bitcoin-transaction-and-script-formats).
+03](bip-0203.mediawiki#bolt-3-bitcoin-transaction-and-script-formats).
 The funder then sends the outpoint of the funding output along with a
 signature for the responder's version of the commitment transaction
 with the `funding_created` message. Once the responder learns the
@@ -112,13 +112,13 @@ The `temporary_channel_id` is used to identify this channel until the funding tr
 
 `max_htlc_value_in_flight_msat` is a cap on total value of outstanding HTLCs, which allows a node to limit its exposure to HTLCs; similarly `max_accepted_htlcs` limits the number of outstanding HTLCs the other node can offer. `channel_reserve_satoshis` is the minimum amount that the other node is to keep as a direct payment. `htlc_minimum_msat` indicates the smallest value HTLC this node will accept.
 
-`feerate_per_kw` indicates the initial fee rate by 1000-weight (ie. 1/4 the more normally-used 'feerate per kilobyte') which this side will pay for commitment and HTLC transactions as described in [BOLT #3](03-transactions.md#fee-calculation) (this can be adjusted later with an `update_fee` message).  `to_self_delay` is the number of blocks that the other nodes to-self outputs must be delayed, using `OP_CHECKSEQUENCEVERIFY` delays; this is how long it will have to wait in case of breakdown before redeeming its own funds.
+`feerate_per_kw` indicates the initial fee rate by 1000-weight (ie. 1/4 the more normally-used 'feerate per kilobyte') which this side will pay for commitment and HTLC transactions as described in [BOLT #3](bip-0203.mediawiki#fee-calculation) (this can be adjusted later with an `update_fee` message).  `to_self_delay` is the number of blocks that the other nodes to-self outputs must be delayed, using `OP_CHECKSEQUENCEVERIFY` delays; this is how long it will have to wait in case of breakdown before redeeming its own funds.
 
 Only the least-significant bit of `channel_flags` is currently
 defined: `announce_channel`.  This indicates whether the initiator of the
 funding flow wishes to advertise this channel publicly to the network
 as detailed within
-[BOLT #7](https://github.com/lightningnetwork/lightning-rfc/blob/master/07-routing-gossip.md#bolt-7-p2p-node-and-channel-discovery).
+[BOLT #7](bip-0207.mediawiki#bolt-7-p2p-node-and-channel-discovery).
 
 The `funding_pubkey` is the public key in the 2-of-2 multisig script of the funding transaction output.  The `revocation_basepoint` is combined with the revocation preimage for this commitment transaction to generate a unique revocation key for this commitment transaction. The `payment_basepoint` and `delayed_payment_basepoint` are similarly used to generate a series of keys for any payments to this node: `delayed_payment_basepoint` is used to for payments encumbered by a delay.  Varying these keys ensures that the transaction ID of each commitment transaction is unpredictable by an external observer, even if one commitment transaction is seen: this property is very useful for preserving privacy when outsourcing penalty transactions to third parties.
 
@@ -243,7 +243,7 @@ signature, it will broadcast the funding transaction.
 
 #### Requirements
 
-The sender MUST set `temporary_channel_id` the same as the `temporary_channel_id` in the `open_channel` message.  The sender MUST set `funding_txid` to the transaction ID of a non-malleable transaction, which it MUST NOT broadcast, and MUST set `funding_output_index` to the output number of that transaction which corresponds the funding transaction output as defined in [BOLT #3](03-transactions.md#funding-transaction-output), and MUST set `signature` to the valid signature using its `funding_pubkey` for the initial commitment transaction as defined in [BOLT #3](03-transactions.md#commitment-transaction).  The sender SHOULD use only BIP141 (Segregated Witness) inputs when creating the funding transaction.
+The sender MUST set `temporary_channel_id` the same as the `temporary_channel_id` in the `open_channel` message.  The sender MUST set `funding_txid` to the transaction ID of a non-malleable transaction, which it MUST NOT broadcast, and MUST set `funding_output_index` to the output number of that transaction which corresponds the funding transaction output as defined in [BOLT #3](bip-0203.mediawiki#funding-transaction-output), and MUST set `signature` to the valid signature using its `funding_pubkey` for the initial commitment transaction as defined in [BOLT #3](bip-0203.mediawiki#commitment-transaction).  The sender SHOULD use only BIP141 (Segregated Witness) inputs when creating the funding transaction.
 
 The recipient MUST fail the channel if `signature` is incorrect.
 
@@ -268,7 +268,7 @@ This message introduces the `channel_id` to identify the channel, which is deriv
 
 #### Requirements
 
-The sender MUST set `channel_id` by exclusive-OR of the `funding_txid` and the `funding_output_index` from the `funding_created` message, and MUST set `signature` to the valid signature using its `funding_pubkey` for the initial commitment transaction as defined in [BOLT #3](03-transactions.md#commitment-transaction).
+The sender MUST set `channel_id` by exclusive-OR of the `funding_txid` and the `funding_output_index` from the `funding_created` message, and MUST set `signature` to the valid signature using its `funding_pubkey` for the initial commitment transaction as defined in [BOLT #3](bip-0203.mediawiki#commitment-transaction).
 
 The recipient MUST fail the channel if `signature` is incorrect.
 
@@ -291,7 +291,7 @@ The sender MUST wait until the funding transaction has reached
 The sender MUST set `next_per_commitment_point` to the
 per-commitment point to be used for the following commitment
 transaction, derived as specified in
-[BOLT #3](03-transactions.md#per-commitment-secret-requirements).
+[BOLT #3](bip-0203.mediawiki#per-commitment-secret-requirements).
 
 A non-funding node SHOULD forget the channel if it does not see the
 funding transaction after a reasonable timeout.
@@ -453,7 +453,7 @@ reason to pay a premium for rapid processing.
 
 ## Normal Operation
 
-Once both nodes have exchanged `funding_locked` (and optionally [`announcement_signatures`](https://github.com/lightningnetwork/lightning-rfc/blob/master/07-routing-gossip.md#the-announcement_signatures-message)), the channel can be used to make payments via Hash TimeLocked Contracts.
+Once both nodes have exchanged `funding_locked` (and optionally [`announcement_signatures`](bip-0207.mediawiki#the-announcement_signatures-message)), the channel can be used to make payments via Hash TimeLocked Contracts.
 
 Changes are sent in batches: one or more `update_` messages are sent before a
 `commitment_signed` message, as in the following diagram:
@@ -544,7 +544,7 @@ A ------------------> B ------------------> C
 ```
 
 The difference in timeouts is called `cltv_expiry_delta` in 
-[BOLT #7](07-routing-gossip.md).
+[BOLT #7](bip-0207.mediawiki).
 
 This difference is important: after 2 days B can try to
 remove the offer to C even if C is unresponsive, by broadcasting the
@@ -587,11 +587,11 @@ Either node can send `update_add_htlc` to offer a HTLC to the other,
 which is redeemable in return for a payment preimage.  Amounts are in
 millisatoshi, though on-chain enforcement is only possible for whole
 satoshi amounts greater than the dust limit: in commitment transactions these are rounded down as
-specified in [BOLT #3](03-transactions.md).
+specified in [BOLT #3](bip-0203.mediawiki).
 
 
 The format of the `onion_routing_packet` portion, which indicates where the payment
-is destined, is described in [BOLT #4](04-onion-routing.md).
+is destined, is described in [BOLT #4](bip-0204.mediawiki).
 
 
 1. type: 128 (`update_add_htlc`)
@@ -669,7 +669,7 @@ recipient code, though strict checking may help debugging.
 sides send the maximum number of HTLCs, the `commitment_signed` message will
 still be under the maximum message size.  It also ensures that
 a single penalty transaction can spend the entire commitment transaction,
-as calculated in [BOLT #5](05-onchain.md#penalty-transaction-weight-calculation).
+as calculated in [BOLT #5](bip-0205.mediawiki#penalty-transaction-weight-calculation).
 
 `cltv_expiry` values equal or above 500000000 would indicate a time in
 seconds, and the protocol only supports an expiry in blocks.
@@ -685,7 +685,7 @@ There are three reasons for removing an HTLC: it has timed out, it has
 failed to route, or the payment preimage is supplied.
 
 The `reason` field is an opaque encrypted blob for the benefit of the
-original HTLC initiator as defined in [BOLT #4](04-onion-routing.md),
+original HTLC initiator as defined in [BOLT #4](bip-0204.mediawiki),
 but there's a special malformed failure variant for the case where
 our peer couldn't parse it; in this case the current node encrypts
 it into a `update_fail_htlc` for relaying.
@@ -765,7 +765,7 @@ such detection is left as an option.
 
 
 When a node has changes for the remote commitment, it can apply them,
-sign the resulting transaction as defined in [BOLT #3](03-transactions.md) and send a
+sign the resulting transaction as defined in [BOLT #3](bip-0203.mediawiki) and send a
 `commitment_signed` message.
 
 
@@ -824,7 +824,7 @@ to apply to its own commitment, any pending updates it sent before
 that `commitment_signed`.
 
 
-The description of key derivation is in [BOLT #3](03-transactions.md#key-derivation).
+The description of key derivation is in [BOLT #3](bip-0203.mediawiki#key-derivation).
 
 
 1. type: 133 (`revoke_and_ack`)
@@ -839,7 +839,7 @@ The description of key derivation is in [BOLT #3](03-transactions.md#key-derivat
 A sending node MUST set `per_commitment_secret` to the secret used to generate keys for the
 previous commitment transaction, MUST set `next_per_commitment_point` to the values for its next commitment transaction.
 
-A receiving node MUST check that `per_commitment_secret` generates the previous `per_commitment_point`, and MUST fail if it does not. A receiving node MAY fail if the `per_commitment_secret` was not generated by the protocol in [BOLT #3](03-transactions.md#per-commitment-secret-requirements).
+A receiving node MUST check that `per_commitment_secret` generates the previous `per_commitment_point`, and MUST fail if it does not. A receiving node MAY fail if the `per_commitment_secret` was not generated by the protocol in [BOLT #3](bip-0203.mediawiki#per-commitment-secret-requirements).
 
 Nodes MUST NOT broadcast old (revoked) commitment transactions; doing
 so will allow the other node to seize all the funds.  Nodes SHOULD NOT
@@ -858,10 +858,10 @@ There is a possibility of a race: the recipient can add new HTLCs
 before it receives the `update_fee`, and the sender may not be able to
 afford the fee on its own commitment transaction once the `update_fee`
 is acknowledged by the recipient.  In this case, the fee will be less
-than the fee rate, as described in [BOLT #3](03-transactions.md#fee-payment).
+than the fee rate, as described in [BOLT #3](bip-0203.mediawiki#fee-payment).
 
 The exact calculation used for deriving the fee from the fee rate is
-given in [BOLT #3](03-transactions.md#fee-calculation).
+given in [BOLT #3](bip-0203.mediawiki#fee-calculation).
 
 
 1. type: 134 (`update_fee`)
@@ -925,7 +925,7 @@ operation acknowledgments of updates are delayed until the
 the updates have been received.  This also means that the receiving
 node only needs to store updates upon receipt of `commitment_signed`.
 
-Note that messages described in [BOLT #7](07-routing-gossip.md) are
+Note that messages described in [BOLT #7](bip-0207.mediawiki) are
 independent of particular channels; their transmission requirements
 are covered there, and other than being transmitted after `init` (like
 any message), they are independent of requirements here.
