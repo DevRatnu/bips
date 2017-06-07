@@ -1,256 +1,181 @@
-# BOLT #1: Base Protocol
+= BOLT #1: Base Protocol =
 
-## Overview
-This protocol assumes an underlying authenticated and ordered transport mechanism that takes care of framing individual messages.
-[BOLT #8](bip-0208.mediawiki) specifies the canonical transport layer used in Lightning, though it can be replaced by any transport that fulfills the above guarantees.
+== Overview ==
 
-The default TCP port is 9735. This corresponds to hexadecimal `0x2607`, the Unicode code point for LIGHTNING.<sup>[1](#reference-1)</sup>
+This protocol assumes an underlying authenticated and ordered transport mechanism that takes care of framing individual messages. [[bip-0208.mediawiki|BOLT #8]] specifies the canonical transport layer used in Lightning, though it can be replaced by any transport that fulfills the above guarantees.
+
+The default TCP port is 9735. This corresponds to hexadecimal <code>0x2607</code>, the Unicode code point for LIGHTNING.<sup>[[#reference-1|1]]</sup>
 
 All data fields are big-endian unless otherwise specified.
 
-## Table of Contents
-  * [Connection handling and multiplexing](#connection-handling-and-multiplexing)
-  * [Lightning Message Format](#lightning-message-format)
-  * [Setup Messages](#setup-messages)
-    * [The `init` message](#the-init-message)
-    * [The `error` message](#the-error-message)
-  * [Control Messages](#control-messages)
-    * [The `ping` and `pong` messages](#the-ping-and-pong-messages)
-  * [Acknowledgments](#acknowledgments)
-  * [References](#references)
-  * [Authors](#authors)
+== Table of Contents ==
 
-## Connection handling and multiplexing
+* [[#connection-handling-and-multiplexing|Connection handling and multiplexing]]
+* [[#lightning-message-format|Lightning Message Format]]
+* [[#setup-messages|Setup Messages]]
+** [[#the-init-message|The <code>init</code> message]]
+** [[#the-error-message|The <code>error</code> message]]
+* [[#control-messages|Control Messages]]
+** [[#the-ping-and-pong-messages|The <code>ping</code> and <code>pong</code> messages]]
+* [[#acknowledgments|Acknowledgments]]
+* [[#references|References]]
+* [[#authors|Authors]]
+
+== Connection handling and multiplexing ==
 
 Implementations MUST use one connection per peer, channel messages (which include a channel id) being multiplexed over this single connection.
 
-
-## Lightning Message Format
+== Lightning Message Format ==
 
 After decryption, all lightning messages are of the form:
 
-1. `type`: 2 byte big-endian field indicating the type of the message.
-2. `payload`: variable length payload. It comprises the remainder of
-   the message and conforms to the format matching the `type`.
+# <code>type</code>: 2 byte big-endian field indicating the type of the message.
+# <code>payload</code>: variable length payload. It comprises the remainder of the message and conforms to the format matching the <code>type</code>.
 
-The `type` field indicates how to interpret the `payload` field.
-The format for each individual type is specified in a specification in this repository.
-The type follows the _it's ok to be odd_ rule, so nodes MAY send odd-numbered types without ascertaining that the recipient understands it. 
-A node MUST NOT send an evenly-typed message not listed here without prior negotiation.
-A node MUST ignore a received message of unknown type, if that type is odd.
-A node MUST fail the channels if it receives a message of unknown type, if that type is even.
+The <code>type</code> field indicates how to interpret the <code>payload</code> field. The format for each individual type is specified in a specification in this repository. The type follows the ''it's ok to be odd'' rule, so nodes MAY send odd-numbered types without ascertaining that the recipient understands it. A node MUST NOT send an evenly-typed message not listed here without prior negotiation. A node MUST ignore a received message of unknown type, if that type is odd. A node MUST fail the channels if it receives a message of unknown type, if that type is even.
 
 The messages are grouped logically into 4 groups by their most significant set bit:
 
- - Setup & Control (types `0`-`31`): messages related to connection setup, control, supported features, and error reporting. These are described below.
- - Channel (types `32`-`127`): comprises messages used to setup and tear down micropayment channels. These are described in [BOLT #2](bip-0202.mediawiki).
- - Commitment (types `128`-`255`): comprises messages related to updating the current commitment transaction, which includes adding, revoking, and settling HTLCs, as well as updating fees and exchanging signatures. These are described in [BOLT #2](bip-0202.mediawiki).
- - Routing (types `256`-`511`): node and channel announcements, as well as any active route exploration. These are described in [BOLT #7](bip-0207.mediawiki).
+* Setup &amp; Control (types <code>0</code>-<code>31</code>): messages related to connection setup, control, supported features, and error reporting. These are described below.
+* Channel (types <code>32</code>-<code>127</code>): comprises messages used to setup and tear down micropayment channels. These are described in [[bip-0202.mediawiki|BOLT #2]].
+* Commitment (types <code>128</code>-<code>255</code>): comprises messages related to updating the current commitment transaction, which includes adding, revoking, and settling HTLCs, as well as updating fees and exchanging signatures. These are described in [[bip-0202.mediawiki|BOLT #2]].
+* Routing (types <code>256</code>-<code>511</code>): node and channel announcements, as well as any active route exploration. These are described in [[bip-0207.mediawiki|BOLT #7]].
 
-The size of the message is required to fit into a 2 byte unsigned int by the transport layer, therefore the maximum possible size is 65535 bytes.
-A node MUST ignore any additional data within a message, beyond the length it expects for that type.
-A node MUST fail the channels if it receives a known message with insufficient length for the contents.
+The size of the message is required to fit into a 2 byte unsigned int by the transport layer, therefore the maximum possible size is 65535 bytes. A node MUST ignore any additional data within a message, beyond the length it expects for that type. A node MUST fail the channels if it receives a known message with insufficient length for the contents.
 
-### Rationale
+=== Rationale ===
 
-The standard endian of `SHA2` and the encoding of Bitcoin public keys
-are big endian, thus it would be unusual to use a different endian for
-other fields.
+The standard endian of <code>SHA2</code> and the encoding of Bitcoin public keys are big endian, thus it would be unusual to use a different endian for other fields.
 
-Length is limited to 65535 bytes by the cryptographic wrapping, and
-messages in the protocol are never more than that length anyway.
+Length is limited to 65535 bytes by the cryptographic wrapping, and messages in the protocol are never more than that length anyway.
 
-The "it's OK to be odd" rule allows for future optional extensions
-without negotiation or special coding in clients.  The "ignore
-additional data" rule similarly allows for future expansion.
+The &quot;it's OK to be odd&quot; rule allows for future optional extensions without negotiation or special coding in clients. The &quot;ignore additional data&quot; rule similarly allows for future expansion.
 
-Implementations may prefer to have message data aligned on an 8 byte
-boundary (the largest natural alignment requirement of any type here),
-but adding a 6 byte padding after the type field was considered
-wasteful: alignment may be achieved by decrypting the message into
-a buffer with 6 bytes of pre-padding.
+Implementations may prefer to have message data aligned on an 8 byte boundary (the largest natural alignment requirement of any type here), but adding a 6 byte padding after the type field was considered wasteful: alignment may be achieved by decrypting the message into a buffer with 6 bytes of pre-padding.
 
-## Setup Messages
+== Setup Messages ==
 
-### The `init` message
+=== The <code>init</code> message ===
+
 Once authentication is complete, the first message reveals the features supported or required by this node, even if this is a reconnection.
 
-[BOLT #9](bip-0209.mediawiki) specifies lists of global and local features. Each feature is generally represented in `globalfeatures` or `localfeatures` by 2 bits.  The least-significant bit is numbered 0, which is even, and the next most significant bit is numbered 1, which is odd.
+[[bip-0209.mediawiki|BOLT #9]] specifies lists of global and local features. Each feature is generally represented in <code>globalfeatures</code> or <code>localfeatures</code> by 2 bits. The least-significant bit is numbered 0, which is even, and the next most significant bit is numbered 1, which is odd.
 
-Both fields `globalfeatures` and `localfeatures` MUST be padded to bytes with zeros.
+Both fields <code>globalfeatures</code> and <code>localfeatures</code> MUST be padded to bytes with zeros.
 
-1. type: 16 (`init`)
-2. data:
-   * [`2`:`gflen`]
-   * [`gflen`:`globalfeatures`]
-   * [`2`:`lflen`]
-   * [`lflen`:`localfeatures`]
+# type: 16 (<code>init</code>)
+# data:
 
-The 2 byte `gflen` and `lflen` fields indicate the number of bytes in the immediately following field.
+* [<code>2</code>:<code>gflen</code>]
+* [<code>gflen</code>:<code>globalfeatures</code>]
+* [<code>2</code>:<code>lflen</code>]
+* [<code>lflen</code>:<code>localfeatures</code>]
 
-#### Requirements
+The 2 byte <code>gflen</code> and <code>lflen</code> fields indicate the number of bytes in the immediately following field.
 
-Each node MUST send `init` as the first lightning message for any
-connection.
-The sending node SHOULD use the minimum lengths required to represent
-the feature fields.  
+==== Requirements ====
 
-The sender MUST set feature bits as defined in [BOLT #9](bip-0209.mediawiki),
-and MUST set to zero any feature bits that are not defined.
+Each node MUST send <code>init</code> as the first lightning message for any connection. The sending node SHOULD use the minimum lengths required to represent the feature fields.
 
-The receiver MUST respond to known feature bits as specified in
-[BOLT #9](bip-0209.mediawiki).  For unknown feature bits which are
-non-zero, the receiver MUST ignore the bit if the bit number is odd,
-and MUST fail the connection if the bit number is even.
+The sender MUST set feature bits as defined in [[bip-0209.mediawiki|BOLT #9]], and MUST set to zero any feature bits that are not defined.
 
-Each node MUST wait to receive `init` before sending any other messages.
+The receiver MUST respond to known feature bits as specified in [[bip-0209.mediawiki|BOLT #9]]. For unknown feature bits which are non-zero, the receiver MUST ignore the bit if the bit number is odd, and MUST fail the connection if the bit number is even.
 
-#### Rationale
+Each node MUST wait to receive <code>init</code> before sending any other messages.
 
-This semantic allows future incompatible changes, or backward
-compatible changes.  Bits should generally be assigned in pairs, so
-that optional features can later become compulsory.
+==== Rationale ====
 
-Nodes wait for receipt of the other's features to simplify error
-diagnosis where features are incompatible.
+This semantic allows future incompatible changes, or backward compatible changes. Bits should generally be assigned in pairs, so that optional features can later become compulsory.
 
-The feature masks are split into local features which only affect the
-protocol between these two nodes, and global features which can affect
-HTLCs and thus are also advertised to other nodes.
+Nodes wait for receipt of the other's features to simplify error diagnosis where features are incompatible.
 
-### The `error` message
+The feature masks are split into local features which only affect the protocol between these two nodes, and global features which can affect HTLCs and thus are also advertised to other nodes.
+
+=== The <code>error</code> message ===
 
 For simplicity of diagnosis, it is often useful to tell the peer that something is incorrect.
 
-1. type: 17 (`error`)
-2. data:
-   * [`32`:`channel_id`]
-   * [`2`:`len`]
-   * [`len`:`data`]
+# type: 17 (<code>error</code>)
+# data:
 
-The 2-byte `len` field indicates the number of bytes in the immediately following field.
+* [<code>32</code>:<code>channel_id</code>]
+* [<code>2</code>:<code>len</code>]
+* [<code>len</code>:<code>data</code>]
 
-#### Requirements
+The 2-byte <code>len</code> field indicates the number of bytes in the immediately following field.
 
-The channel is referred to by `channel_id` unless `channel_id` is zero (ie. all bytes zero), in which case it refers to all channels.
+==== Requirements ====
 
-The funding node MUST use `temporary_channel_id` in lieu of `channel_id` for all error messages sent before (and including) the `funding_created` message. The fundee node MUST use `temporary_channel_id` in lieu of `channel_id` for all error messages sent before (and not including) the `funding_signed` message.
+The channel is referred to by <code>channel_id</code> unless <code>channel_id</code> is zero (ie. all bytes zero), in which case it refers to all channels.
 
-A node SHOULD send `error` for protocol violations or internal
-errors which make channels unusable or further communication unusable.
-A node MAY send an empty `data` field.  A node sending `error` MUST
-fail the channel referred to by the error message, or if `channel_id` is zero, it MUST
-fail all channels and MUST close the connection.
-A node MUST set `len` equal to the length of `data`.  A node SHOULD include the raw, hex-encoded transaction in reply to a `funding_created`, `funding_signed`, `closing_signed` or `commitment_signed` message when failure was caused by an invalid signature check.
+The funding node MUST use <code>temporary_channel_id</code> in lieu of <code>channel_id</code> for all error messages sent before (and including) the <code>funding_created</code> message. The fundee node MUST use <code>temporary_channel_id</code> in lieu of <code>channel_id</code> for all error messages sent before (and not including) the <code>funding_signed</code> message.
 
-A node receiving `error` MUST fail the channel referred to by the message,
-or if `channel_id` is zero, it MUST fail all channels and MUST close the connection.  If no existing channel is referred to by the message, the receiver MUST ignore the message. A receiving node MUST truncate
-`len` to the remainder of the packet if it is larger.
+A node SHOULD send <code>error</code> for protocol violations or internal errors which make channels unusable or further communication unusable. A node MAY send an empty <code>data</code> field. A node sending <code>error</code> MUST fail the channel referred to by the error message, or if <code>channel_id</code> is zero, it MUST fail all channels and MUST close the connection. A node MUST set <code>len</code> equal to the length of <code>data</code>. A node SHOULD include the raw, hex-encoded transaction in reply to a <code>funding_created</code>, <code>funding_signed</code>, <code>closing_signed</code> or <code>commitment_signed</code> message when failure was caused by an invalid signature check.
 
-A receiving node SHOULD only print out `data` verbatim if the string is composed solely of printable ASCII characters.
-For reference, the printable character set includes byte values 32 through 127 inclusive.
+A node receiving <code>error</code> MUST fail the channel referred to by the message, or if <code>channel_id</code> is zero, it MUST fail all channels and MUST close the connection. If no existing channel is referred to by the message, the receiver MUST ignore the message. A receiving node MUST truncate <code>len</code> to the remainder of the packet if it is larger.
 
-#### Rationale
+A receiving node SHOULD only print out <code>data</code> verbatim if the string is composed solely of printable ASCII characters. For reference, the printable character set includes byte values 32 through 127 inclusive.
 
-There are unrecoverable errors which require an abort of conversations;
-if the connection is simply dropped then the peer may retry the
-connection.  It's also useful to describe protocol violations for
-diagnosis, as it indicates that one peer has a bug.
+==== Rationale ====
 
-It may be wise not to distinguish errors in production settings, lest
-it leak information, thus the optional `data` field.
+There are unrecoverable errors which require an abort of conversations; if the connection is simply dropped then the peer may retry the connection. It's also useful to describe protocol violations for diagnosis, as it indicates that one peer has a bug.
 
-## Control Messages
+It may be wise not to distinguish errors in production settings, lest it leak information, thus the optional <code>data</code> field.
 
-### The `ping` and `pong` messages
+== Control Messages ==
 
-In order to allow for the existence of very long-lived TCP connections, at
-times it may be required that both ends keep alive the TCP connection at the
-application level.  Such messages also allow obfuscation of traffic patterns.
+=== The <code>ping</code> and <code>pong</code> messages ===
 
-1. type: 18 (`ping`)
-2. data: 
-    * [`2`:`num_pong_bytes`]
-    * [`2`:`byteslen`]
-    * [`byteslen`:`ignored`]
+In order to allow for the existence of very long-lived TCP connections, at times it may be required that both ends keep alive the TCP connection at the application level. Such messages also allow obfuscation of traffic patterns.
 
-The `pong` message is to be sent whenever a `ping` message is received. It
-serves as a reply, and also serves to keep the connection alive while
-explicitly notifying the other end that the receiver is still active. Within
-the received `ping` message, the sender will specify the number of bytes to be
-included within the data payload of the `pong` message
+# type: 18 (<code>ping</code>)
+# data:
+#* [<code>2</code>:<code>num_pong_bytes</code>]
+#* [<code>2</code>:<code>byteslen</code>]
+#* [<code>byteslen</code>:<code>ignored</code>]
 
-1. type: 19 (`pong`)
-2. data:
-    * [`2`:`byteslen`]
-    * [`byteslen`:`ignored`]
+The <code>pong</code> message is to be sent whenever a <code>ping</code> message is received. It serves as a reply, and also serves to keep the connection alive while explicitly notifying the other end that the receiver is still active. Within the received <code>ping</code> message, the sender will specify the number of bytes to be included within the data payload of the <code>pong</code> message
 
-#### Requirements
+# type: 19 (<code>pong</code>)
+# data:
+#* [<code>2</code>:<code>byteslen</code>]
+#* [<code>byteslen</code>:<code>ignored</code>]
 
-A node sending `pong` or `ping` SHOULD set `ignored` to zeroes, but MUST NOT
-set `ignored` to sensitive data such as secrets, or portions of initialized
-memory.
+==== Requirements ====
 
-A node SHOULD NOT send `ping` messages more often than once every 30 seconds,
-and MAY terminate the network connection if it does not receive a corresponding
-`pong`: it MUST NOT fail the channels in this case.
+A node sending <code>pong</code> or <code>ping</code> SHOULD set <code>ignored</code> to zeroes, but MUST NOT set <code>ignored</code> to sensitive data such as secrets, or portions of initialized memory.
 
-A node receiving a `ping` message SHOULD fail the channels if it has received
-significantly in excess of one `ping` per 30 seconds, otherwise if
-`num_pong_bytes` is less than 65532 it MUST respond by sending a `pong` message
-with `byteslen` equal to `num_pong_bytes`, otherwise it MUST ignore the `ping`.
+A node SHOULD NOT send <code>ping</code> messages more often than once every 30 seconds, and MAY terminate the network connection if it does not receive a corresponding <code>pong</code>: it MUST NOT fail the channels in this case.
 
-A node receiving a `pong` message MAY fail the channels if `byteslen` does not
-correspond to any `ping` `num_pong_bytes` value it has sent.
+A node receiving a <code>ping</code> message SHOULD fail the channels if it has received significantly in excess of one <code>ping</code> per 30 seconds, otherwise if <code>num_pong_bytes</code> is less than 65532 it MUST respond by sending a <code>pong</code> message with <code>byteslen</code> equal to <code>num_pong_bytes</code>, otherwise it MUST ignore the <code>ping</code>.
 
-### Rationale
+A node receiving a <code>pong</code> message MAY fail the channels if <code>byteslen</code> does not correspond to any <code>ping</code> <code>num_pong_bytes</code> value it has sent.
 
-The largest possible message is 65535 bytes, thus maximum sensible `byteslen`
-is 65531 to account for the type field (`pong`) and `byteslen` itself.  This
-gives us a convenient cutoff for `num_pong_bytes` to indicate that no reply
-should be sent.
+=== Rationale ===
 
-Connections between nodes within the network may be very long lived as payment
-channels have an indefinite lifetime. However, it's likely that for a
-significant portion of the life-time of a connection, no new data will be
-exchanged. Additionally, on several platforms it's possible that Lightning
-clients will be put to sleep without prior warning.  As a result, we use a
-distinct ping message in order to probe for the liveness of the connection on
-the other side, and also to keep the established connection active. 
+The largest possible message is 65535 bytes, thus maximum sensible <code>byteslen</code> is 65531 to account for the type field (<code>pong</code>) and <code>byteslen</code> itself. This gives us a convenient cutoff for <code>num_pong_bytes</code> to indicate that no reply should be sent.
 
-Additionally, the ability for a sender to request that the receiver send a
-response with a particular number of bytes enables nodes on the network to
-create _synthetic_ traffic. Such traffic can be used to partially defend
-against packet and timing analysis as nodes can fake the traffic patterns of
-typical exchanges, without applying any true updates to their respective
-channels. 
+Connections between nodes within the network may be very long lived as payment channels have an indefinite lifetime. However, it's likely that for a significant portion of the life-time of a connection, no new data will be exchanged. Additionally, on several platforms it's possible that Lightning clients will be put to sleep without prior warning. As a result, we use a distinct ping message in order to probe for the liveness of the connection on the other side, and also to keep the established connection active.
 
-When combined with the onion routing protocol defined in
-[BOLT #4](bip-0204.mediawiki),
-careful statistically driven synthetic traffic can serve to further bolster the
-privacy of participants within the network.
+Additionally, the ability for a sender to request that the receiver send a response with a particular number of bytes enables nodes on the network to create ''synthetic'' traffic. Such traffic can be used to partially defend against packet and timing analysis as nodes can fake the traffic patterns of typical exchanges, without applying any true updates to their respective channels.
 
-Limited precautions are recommended against `ping` flooding, however some
-latitude is given because of network delays.  Note that there are other methods
-of incoming traffic flooding (eg. sending odd unknown message types, or padding
-every message maximally).
+When combined with the onion routing protocol defined in [[bip-0204.mediawiki|BOLT #4]], careful statistically driven synthetic traffic can serve to further bolster the privacy of participants within the network.
 
-Finally, the usage of periodic `ping` messages serves to promote frequent key
-rotations as specified within [BOLT #8](bip-0208.mediawiki).
+Limited precautions are recommended against <code>ping</code> flooding, however some latitude is given because of network delays. Note that there are other methods of incoming traffic flooding (eg. sending odd unknown message types, or padding every message maximally).
 
+Finally, the usage of periodic <code>ping</code> messages serves to promote frequent key rotations as specified within [[bip-0208.mediawiki|BOLT #8]].
 
-## Acknowledgments
+== Acknowledgments ==
 
 TODO(roasbeef); fin
 
+== References ==
 
-## References
-1. <a id="reference-2">http://www.unicode.org/charts/PDF/U2600.pdf</a>
+# <a id="reference-2">http://www.unicode.org/charts/PDF/U2600.pdf</a>
 
-## Authors
+== Authors ==
 
 FIXME
 
-![Creative Commons License](https://i.creativecommons.org/l/by/4.0/88x31.png "License CC-BY")
-<br>
-This work is licensed under a [Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/).
+[[File:https://i.creativecommons.org/l/by/4.0/88x31.png|License CC-BY]] <br> This work is licensed under a [http://creativecommons.org/licenses/by/4.0/ Creative Commons Attribution 4.0 International License].
+

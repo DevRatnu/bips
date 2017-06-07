@@ -1,488 +1,302 @@
-# BOLT #5: Recommendations for On-chain Transaction Handling
+= BOLT #5: Recommendations for On-chain Transaction Handling =
 
-## Abstract
+== Abstract ==
 
-Lightning allows for two parties (A and B) to make transactions off-chain, by both holding a cross-signed *commitment transaction*, which describes the current state of the channel (basically the current balance). This *commitment transaction* is updated every time a new payment is made, and is spendable at all times.
+Lightning allows for two parties (A and B) to make transactions off-chain, by both holding a cross-signed ''commitment transaction'', which describes the current state of the channel (basically the current balance). This ''commitment transaction'' is updated every time a new payment is made, and is spendable at all times.
 
 There are three ways a channel can end:
 
-1. The good way (*mutual close*): at some point A and B agree on closing the channel, they generate a *closing transaction* (which is similar to a *commitment transaction* without any pending payments), and publish it on the blockchain (see [BOLT #2: Channel Close](bip-0202.mediawiki#channel-close)).
-2. The bad way (*unilateral close*): something goes wrong, without necessarily any evil intent on either side (maybe one party crashed, for instance). Anyway, one side publishes its latest *commitment transaction*.
-3. The ugly way (*revoked transaction close*): one of the parties deliberately tries to cheat by publishing an outdated version of its *commitment transaction* (presumably one that was more in her favor).
+# The good way (''mutual close''): at some point A and B agree on closing the channel, they generate a ''closing transaction'' (which is similar to a ''commitment transaction'' without any pending payments), and publish it on the blockchain (see [[bip-0202.mediawiki#channel-close|BOLT #2: Channel Close]]).
+# The bad way (''unilateral close''): something goes wrong, without necessarily any evil intent on either side (maybe one party crashed, for instance). Anyway, one side publishes its latest ''commitment transaction''.
+# The ugly way (''revoked transaction close''): one of the parties deliberately tries to cheat by publishing an outdated version of its ''commitment transaction'' (presumably one that was more in her favor).
 
 Because Lightning is designed to be trustless, there is no risk of loss of funds in any of these 3 cases, provided that the situation is properly handled. The goal of this document is to explain exactly how node A should react to seeing any of these on-chain.
 
-# Table of Contents
-  * [General Nomenclature](#general-nomenclature)
-  * [Commitment Transaction](#commitment-transaction)
-  * [Failing A Channel](#failing-a-channel)
-  * [Mutual Close Handling](#mutual-close-handling)
-  * [Unilateral Close Handling](#unilateral-close-handling)
-  * [On-chain HTLC Output Handling: Our Offers](#on-chain-htlc-output-handling-our-offers)
-  * [On-chain HTLC Output Handling: Their Offers](#on-chain-htlc-output-handling-their-offers)
-  * [On-chain HTLC Transaction Handling](#on-chain-htlc-transaction-handling)
-  * [Revoked Transaction Close Handling](#revoked-transaction-close-handling)
-	  * [Penalty Transactions Weight Calculation](#penalty-transactions-weight-calculation)
-  * [General Requirements](#general-requirements)
-  * [Appendix A: Expected weights](#appendix-a-expected-weights)
-	* [Expected weight of the `to_local` penalty transaction witness](#expected-weight-of-the-to-local-penalty-transaction-witness)
-	* [Expected weight of the received-htlc penalty transaction witness](#expected-weight-of-the-received-htlc-penalty-transaction-witness)
-  * [Authors](#authors)
+= Table of Contents =
 
-# General Nomenclature
+* [[#general-nomenclature|General Nomenclature]]
+* [[#commitment-transaction|Commitment Transaction]]
+* [[#failing-a-channel|Failing A Channel]]
+* [[#mutual-close-handling|Mutual Close Handling]]
+* [[#unilateral-close-handling|Unilateral Close Handling]]
+* [[#on-chain-htlc-output-handling-our-offers|On-chain HTLC Output Handling: Our Offers]]
+* [[#on-chain-htlc-output-handling-their-offers|On-chain HTLC Output Handling: Their Offers]]
+* [[#on-chain-htlc-transaction-handling|On-chain HTLC Transaction Handling]]
+* [[#revoked-transaction-close-handling|Revoked Transaction Close Handling]]
+** [[#penalty-transactions-weight-calculation|Penalty Transactions Weight Calculation]]
+* [[#general-requirements|General Requirements]]
+* [[#appendix-a-expected-weights|Appendix A: Expected weights]]
+** [[#expected-weight-of-the-to-local-penalty-transaction-witness|Expected weight of the <code>to_local</code> penalty transaction witness]]
+** [[#expected-weight-of-the-received-htlc-penalty-transaction-witness|Expected weight of the received-htlc penalty transaction witness]]
+* [[#authors|Authors]]
 
-We consider any unspent output to be *unresolved*, and *resolve* them
-as detailed in this document.  Usually this means spending it with
-another *resolving* transaction.  Sometimes it simply means noting it
-for later wallet spending, in which case the transaction containing
-the output is considered to be its own *resolving* transaction.
+= General Nomenclature =
 
+We consider any unspent output to be ''unresolved'', and ''resolve'' them as detailed in this document. Usually this means spending it with another ''resolving'' transaction. Sometimes it simply means noting it for later wallet spending, in which case the transaction containing the output is considered to be its own ''resolving'' transaction.
 
-Outputs which are *resolved* are considered *irrevocably resolved*
-once their *resolving* transaction is included in a block at least 100
-deep on the most-work blockchain.  100 blocks is far greater than the
-longest known Bitcoin fork, and the same value used to wait for
-confirmations of miner's rewards[FIXME: ref].
+Outputs which are ''resolved'' are considered ''irrevocably resolved'' once their ''resolving'' transaction is included in a block at least 100 deep on the most-work blockchain. 100 blocks is far greater than the longest known Bitcoin fork, and the same value used to wait for confirmations of miner's rewards[FIXME: ref].
 
+== Requirements ==
 
-## Requirements
+Once a node has broadcast a funding transaction or sent a commitment signature for a commitment transaction which contains an HTLC output, it MUST monitor the blockchain for transactions which spend any output which is not ''irrevocably resolved'' until all outputs are ''irrevocably resolved''.
 
+A node MUST ''resolve'' all outputs as specified below, and MUST be prepared to resolve them multiple times in case of blockchain reorganizations.
 
-Once a node has broadcast a funding transaction or sent a commitment
-signature for a commitment transaction which contains an HTLC output,
-it MUST monitor the blockchain for transactions which spend any output
-which is not *irrevocably resolved* until all outputs are *irrevocably
-resolved*.
-
-
-A node MUST *resolve* all outputs as specified below, and MUST be
-prepared to resolve them multiple times in case of blockchain
-reorganizations.
-
-
-A node SHOULD fail the channel if it is not already closed when it
-sees the funding transaction spent.  A node MAY send a descriptive
-error packet in this case.
-
+A node SHOULD fail the channel if it is not already closed when it sees the funding transaction spent. A node MAY send a descriptive error packet in this case.
 
 Invalid transactions SHOULD be ignored.
 
+== Rationale ==
 
-## Rationale
+Once a node has had some money at stake, monitoring is required to ensure the other side does not close unilaterally.
 
+Invalid transactions (eg. bad signatures) can be generated by anyone, (and will be ignored by the blockchain anyway), so they should not trigger any action.
 
-Once a node has had some money at stake, monitoring is required to
-ensure the other side does not close unilaterally.
+= Commitment Transaction =
 
+A and B each hold a ''commitment transaction'', which has 4 types of outputs:
 
-Invalid transactions (eg. bad signatures) can be generated by anyone,
-(and will be ignored by the blockchain anyway), so they should not
-trigger any action.
+# ''A's main output'': Zero or one outputs which pay to A's commitment key.
+# ''B's main output'': Zero or one outputs which pay to B's commitment key.
+# ''A's offered HTLCs'': Zero or more pending payments (''HTLCs'') to pay B in return for a payment preimage.
+# ''B's offered HTLCs'': Zero or more pending payments (''HTLCs'') to pay A in return for a payment preimage.
 
+As an incentive for A and B to cooperate, an <code>OP_CHECKSEQUENCEVERIFY</code> relative timeout encumbers A's outputs in A's ''commitment transaction'', and B's outputs in B's ''commitment transaction''. If A publishes its commitment transaction, she won't be able to get her funds immediately but B will. As a consequence, A and B's ''commitment transactions'' are not identical, they are (usually) symmetrical.
 
-# Commitment Transaction
+See [[bip-0203.mediawiki#commitment-transaction|BOLT #3: Commitment Transaction]] for more details.
 
+= Failing A Channel =
 
-A and B each hold a *commitment transaction*, which has 4 types of outputs:
+Various error cases involve closing a channel, and this can be done in several ways; the most efficient is preferred. Note that there are requirements around sending the error message to the peer in [[bip-0201.mediawiki#the-error-message|BOLT #1: The <code>error</code> message]].
 
+== Requirements ==
 
-1. _A's main output_: Zero or one outputs which pay to A's commitment key.
-2. _B's main output_: Zero or one outputs which pay to B's commitment key.
-3. _A's offered HTLCs_: Zero or more pending payments (*HTLCs*) to pay B in return for a payment preimage.
-4. _B's offered HTLCs_: Zero or more pending payments (*HTLCs*) to pay A in return for a payment preimage.
+* If no local commitment transaction ever contained a <code>to_local</code> or HTLC output, the node MAY simply forget the channel.
+* Otherwise, if the current commitment transaction does not contain <code>to_local</code> or HTLC outputs, a node MAY simply wait and rely on the other node to close, but MUST not forget the channel.
+* Otherwise, if the node has received a valid <code>closing_signed</code> message with high enough fee level, it SHOULD use that to perform a mutual close.
+* Otherwise, it MUST use the last commitment transaction for which it has a signature to perform unilateral close.
 
+== Rationale ==
 
-As an incentive for A and B to cooperate, an `OP_CHECKSEQUENCEVERIFY` relative timeout encumbers A's outputs in A's *commitment transaction*, and B's outputs in B's *commitment transaction*. If A publishes its commitment transaction, she won't be able to get her funds immediately but B will. As a consequence, A and B's *commitment transactions* are not identical, they are (usually) symmetrical.
+Since <code>dust_limit_satoshis</code> is supposed to prevent uneconomic output creation (which would be left unspent forever in the blockchain), we insist on spending the commitment transaction outputs.
 
+In the early stages of a channel, it's common for one side to have little or no money in the channel; with nothing to lose, there's no reason to consume resources monitoring the channel state.
 
-See [BOLT #3: Commitment Transaction](bip-0203.mediawiki#commitment-transaction) for more details.
+There's a bias towards using mutual close over unilateral because outputs are unencumbered by delay, directly spendable by wallets, and because fees tend to be less exaggerated than commitment transactions: thus the only reason not to use the signature from <code>closing_signed</code> would be if the fee offered was too small for it to be processed.
 
+= Mutual Close Handling =
 
-# Failing A Channel
+A mutual close transaction ''resolves'' the funding transaction output.
 
-Various error cases involve closing a channel, and this can be done in
-several ways; the most efficient is preferred.  Note that there are
-requirements around sending the error message to the peer in
-[BOLT #1: The `error` message](bip-0201.mediawiki#the-error-message).
+A node doesn't need to do anything else as it has already agreed to the output, which is sent to its specified <code>scriptpubkey</code> (see [[bip-0202.mediawiki#closing-initiation-shutdown|BOLT #2: Closing initiation: <code>shutdown</code>]]).
 
-## Requirements
+= Unilateral Close Handling =
 
-- If no local commitment transaction ever contained a `to_local`
-  or HTLC output, the node MAY simply forget the channel.
-- Otherwise, if the current commitment transaction does not contain
-  `to_local` or HTLC outputs, a node MAY simply wait and rely on the
-  other node to close, but MUST not forget the channel.
-- Otherwise, if the node has received a valid `closing_signed` message
-  with high enough fee level, it SHOULD use that to perform a mutual
-  close.
-- Otherwise, it MUST use the last commitment transaction for which it
-  has a signature to perform unilateral close.
+There are two cases to consider here: in the first case, node A sees its own ''commitment transaction'', in the second, it sees the node B's unrevoked ''commitment transaction''.
 
-## Rationale
+Either transaction ''resolves'' the funding transaction output.
 
-Since `dust_limit_satoshis` is supposed to prevent uneconomic output
-creation (which would be left unspent forever in the blockchain), we
-insist on spending the commitment transaction outputs.
+== Requirements ==
 
-In the early stages of a channel, it's common for one side to have
-little or no money in the channel; with nothing to lose, there's no
-reason to consume resources monitoring the channel state.
+When node A sees its own ''commitment transaction'':
 
-There's a bias towards using mutual close over unilateral because
-outputs are unencumbered by delay, directly spendable by wallets, and
-because fees tend to be less exaggerated than commitment transactions:
-thus the only reason not to use the signature from `closing_signed`
-would be if the fee offered was too small for it to be processed.
+# ''A's main output'': A node SHOULD spend this output to a convenient address. A node MUST wait until the <code>OP_CHECKSEQUENCEVERIFY</code> delay has passed (as specified by the other node's <code>to_self_delay</code> field) before spending the output. If the output is spent (as recommended), the output is ''resolved'' by the spending transaction, otherwise it is considered ''resolved'' by the ''commitment transaction'' itself.
+# ''B's main output'': No action required, this output is considered ''resolved'' by the ''commitment transaction'' itself.
+# ''A's offered HTLCs'': See &quot;On-chain HTLC Output Handling: Our Offers&quot; below.
+# ''B's offered HTLCs'': See &quot;On-chain HTLC Output Handling: Their Offers&quot; below.
 
+Similarly, when node A sees a ''commitment transaction'' from B:
 
-# Mutual Close Handling
+# ''A's main output'': No action is required; this is a simple P2WPKH output. This output is considered ''resolved'' by the ''commitment transaction'' itself.
+# ''B's main output'': No action required, this output is considered ''resolved'' by the ''commitment transaction''.
+# ''A's offered HTLCs'': See &quot;On-chain HTLC Output Handling: Our Offers&quot; below.
+# ''B's offered HTLCs'': See &quot;On-chain HTLC Output Handling: Their Offers&quot; below.
 
+A node MUST handle the broadcast if any valid ''commitment transaction'' from B in this way.
 
-A mutual close transaction *resolves* the funding transaction output.
+== Rationale ==
 
+Spending the <code>to_local</code> output avoids having to remember the complicated witness script associated with that particular channel for later spending.
 
-A node doesn't need to do anything else as it has already agreed to the
-output, which is sent to its specified `scriptpubkey` (see [BOLT #2: Closing initiation: `shutdown`](bip-0202.mediawiki#closing-initiation-shutdown)).
+Note that there can be more than one valid, unrevoked ''commitment transaction'' after a signature has been received via <code>commitment_signed</code> and before the corresponding <code>revoke_and_ack</code>. Either commitment can serve as B's ''commitment transaction'', hence the requirement to handle both.
 
+= On-chain HTLC Output Handling: Our Offers =
 
-# Unilateral Close Handling
+Each HTLC output can only be spent by us after it's timed out, or them if they have the payment preimage.
 
+The HTLC has ''timed out'' once the depth of the latest block is equal or greater than the HTLC <code>cltv_expiry</code>.
 
-There are two cases to consider here: in the first case, node A sees
-its own *commitment transaction*, in the second, it sees the node B's unrevoked
-*commitment transaction*.
+== Requirements ==
 
+If the HTLC output is spent using the payment preimage, the HTLC output is considered ''irrevocably resolved'', and the node MUST extract the payment preimage from the transaction input witness.
 
-Either transaction *resolves* the funding transaction output.
+If the HTLC output has ''timed out'' and not been ''resolved'', the node MUST ''resolve'' the output by spending it using the HTLC-timeout transaction. The HTLC-timeout transaction output MUST be ''resolved'' as described in &quot;On-chain HTLC Transaction Handling&quot;.
 
+== Rationale ==
 
-## Requirements
+If the commitment transaction is theirs, the only way to spend the HTLC output using a payment preimage is for them to use the HTLC-success transaction. If the commitment transaction is ours, they could create any transaction using the preimage.
 
+The payment preimage either serves to prove payment (if this node originated the payment), or to redeem the corresponding incoming HTLC from another peer. Note that we don't care about the fate of the HTLC-spending transaction itself once we've extracted the payment preimage; the knowledge is not revocable.
 
-When node A sees its own *commitment transaction*:
+Note that in cases where both resolutions are possible (payment success seen after timeout, for example), either interpretation is acceptable; it is the responsibility of the other node spend it before this occurs.
 
+= On-chain HTLC Output Handling: Their Offers =
 
-1. _A's main output_: A node SHOULD spend this output to a convenient address.
-   A node MUST wait until the `OP_CHECKSEQUENCEVERIFY` delay has passed (as specified by the other
-   node's `to_self_delay` field) before spending the output.  If the
-   output is spent (as recommended), the output is *resolved* by the spending
-   transaction, otherwise it is considered *resolved* by the *commitment transaction* itself.
-2. _B's main output_: No action required, this output is considered *resolved*
-   by the *commitment transaction* itself.
-3. _A's offered HTLCs_: See "On-chain HTLC Output Handling: Our Offers" below.
-4. _B's offered HTLCs_: See "On-chain HTLC Output Handling: Their Offers" below.
+Each HTLC output can only be spent by us if we have the payment preimage, or them if it has timed out.
 
+== Requirements ==
 
-Similarly, when node A sees a *commitment transaction* from B:
+If the node receives (or already knows) a payment preimage for an unresolved HTLC output it was offered, it MUST ''resolve'' the output by spending it. If this is done using the HTLC-success transaction, the HTLC-success transaction output MUST be ''resolved'' as described in &quot;On-chain HTLC Transaction Handling&quot;.
 
+Otherwise, if the HTLC output has expired, it is considered ''irrevocably resolved''.
 
-1. _A's main output_: No action is required; this is a simple P2WPKH output.
-   This output is considered *resolved* by the *commitment transaction* itself.
-2. _B's main output_: No action required, this output is considered *resolved*
-   by the *commitment transaction*.
-3. _A's offered HTLCs_: See "On-chain HTLC Output Handling: Our Offers" below.
-4. _B's offered HTLCs_: See "On-chain HTLC Output Handling: Their Offers" below.
+== Rationale ==
 
+If this is our commitment transaction, we can only use a payment preimage with the HTLC-success transaction (which preserves the <code>to_self_delay</code> requirement). Otherwise we can create any transaction we want to resolve it.
 
-A node MUST handle the broadcast if any valid *commitment transaction*
-from B in this way.
+We don't care about expired offers: we should have ensured that the HTLC can only expire long it is needed.
 
+= On-chain HTLC Transaction Handling =
 
-## Rationale
+Because to-self payments have to be delayed (to allow time for a penalty transaction), HTLC outputs can only be spent by the node which broadcast the ''commitment transaction'' using the HTLC-timeout or the HTLC-success transaction, which include that delay.
 
+== Requirements ==
 
-Spending the `to_local` output avoids having to remember the complicated
-witness script associated with that particular channel for later
-spending.
+A node SHOULD resolve its own HTLC transaction output by spending it to a convenient address. A node MUST wait until the <code>OP_CHECKSEQUENCEVERIFY</code> delay has passed (as specified by the other node's <code>open_channel</code> <code>to_self_delay</code> field) before spending the output.
 
+If the output is spent (as recommended), the output is ''resolved'' by the spending transaction, otherwise it is considered ''resolved'' by the ''commitment transaction'' itself.
 
-Note that there can be more than one valid, unrevoked *commitment
-transaction* after a signature has been received via `commitment_signed` and
-before the corresponding `revoke_and_ack`.  Either commitment can serve as
-B's *commitment transaction*, hence the requirement to handle both.
+== Rationale ==
 
+Spending the <code>to_local</code> output avoids having to remember the complicated witness script associated with that particular channel for later spending.
 
-# On-chain HTLC Output Handling: Our Offers
+= Revoked Transaction Close Handling =
 
+If a node tries to broadcast old state, we can use the revocation key to claim all the funds.
 
-Each HTLC output can only be spent by us after it's timed out,
-or them if they have the payment preimage.
+== Requirements ==
 
+A node MUST NOT broadcast a ''commitment transaction'' for which it has exposed the revocation key.
 
-The HTLC has *timed out* once the depth of the latest block is equal
-or greater than the HTLC `cltv_expiry`.
-
-
-## Requirements
-
-
-If the HTLC output is spent using the payment preimage, the HTLC
-output is considered *irrevocably resolved*, and the node MUST extract
-the payment preimage from the transaction input witness.
-
-
-If the HTLC output has *timed out* and not been *resolved*, the node
-MUST *resolve* the output by spending it using the HTLC-timeout
-transaction.  The HTLC-timeout transaction output MUST be *resolved*
-as described in "On-chain HTLC Transaction Handling".
-
-
-## Rationale
-
-
-If the commitment transaction is theirs, the only way to spend the
-HTLC output using a payment preimage is for them to use the
-HTLC-success transaction.  If the commitment transaction is ours, they
-could create any transaction using the preimage.
-
-
-The payment preimage either serves to prove payment (if this node
-originated the payment), or to redeem the corresponding incoming HTLC
-from another peer.  Note that we don't care about the fate of the
-HTLC-spending transaction itself once we've extracted the payment
-preimage; the knowledge is not revocable.
-
-
-Note that in cases where both resolutions are possible (payment
-success seen after timeout, for example), either interpretation is
-acceptable; it is the responsibility of the other node spend it
-before this occurs.
-
-
-# On-chain HTLC Output Handling: Their Offers
-
-
-Each HTLC output can only be spent by us if we have the payment
-preimage, or them if it has timed out.
-
-
-## Requirements
-
-
-If the node receives (or already knows) a payment preimage for an
-unresolved HTLC output it was offered, it MUST *resolve* the output by
-spending it.  If this is done using the HTLC-success transaction, the
-HTLC-success transaction output MUST be *resolved* as described in
-"On-chain HTLC Transaction Handling".
-
-
-Otherwise, if the HTLC output has expired, it is considered
-*irrevocably resolved*.
-
-
-## Rationale
-
-
-If this is our commitment transaction, we can only use a payment
-preimage with the HTLC-success transaction (which preserves the
-`to_self_delay` requirement).  Otherwise we can create any transaction we want to
-resolve it.
-
-
-We don't care about expired offers: we should have ensured that the
-HTLC can only expire long it is needed.
-
-
-# On-chain HTLC Transaction Handling
-
-
-Because to-self payments have to be delayed (to allow time for a
-penalty transaction), HTLC outputs can only be spent by the node which
-broadcast the *commitment transaction* using the HTLC-timeout or the
-HTLC-success transaction, which include that delay.
-
-
-## Requirements
-
-
-A node SHOULD resolve its own HTLC transaction output by spending it
-to a convenient address.  A node MUST wait until the
-`OP_CHECKSEQUENCEVERIFY` delay has passed (as specified by the other
-node's `open_channel` `to_self_delay` field) before spending the
-output.
-
-
-If the output is spent (as recommended), the output is *resolved* by
-the spending transaction, otherwise it is considered *resolved* by the
-*commitment transaction* itself.
-
-
-## Rationale
-
-
-Spending the `to_local` output avoids having to remember the complicated
-witness script associated with that particular channel for later
-spending.
-
-
-# Revoked Transaction Close Handling
-
-
-If a node tries to broadcast old state, we can use the revocation key
-to claim all the funds.
-
-
-## Requirements
-
-
-A node MUST NOT broadcast a *commitment transaction* for which it has
-exposed the revocation key.
-
-
-If a node sees a *commitment transaction* for which it has a
-revocation key, that *resolves* the funding transaction output.
-
+If a node sees a ''commitment transaction'' for which it has a revocation key, that ''resolves'' the funding transaction output.
 
 A node MUST resolve all unresolved outputs as follows:
 
+# ''A's main output'': No action is required; this is a simple P2WPKH output. This output is considered ''resolved'' by the ''commitment transaction''.
+# ''B's main output'': The node MUST ''resolve'' this by spending using the revocation key.
+# ''A's offered HTLCs'': The node MUST ''resolve'' this in one of three ways by spending:
 
-1. _A's main output_: No action is required; this is a simple P2WPKH output.
-   This output is considered *resolved* by the *commitment transaction*.
-2. _B's main output_: The node MUST *resolve* this by spending using the
-   revocation key.
-3. _A's offered HTLCs_: The node MUST *resolve* this in one of three ways by spending: 
-  * the *commitment tx* using the payment revocation
-  * the *commitment tx* using the payment preimage if known
-  * the *HTLC-timeout tx* if B publishes them
-4. _B's offered HTLCs_: The node MUST *resolve* this in one of two ways by spending:
-  * the *commitment tx* using the payment revocation
-  * the *commitment tx* once the HTLC timeout has passed.
-5. _B's HTLC-timeout transaction_: The node MUST *resolve* this by
-   spending using the revocation key.
-6. _B's HTLC-success transaction_: The node MUST *resolve* this by
-   spending using the revocation key.  The node SHOULD extract
-   the payment preimage from the transaction input witness if not
-   already known.
+* the ''commitment tx'' using the payment revocation
+* the ''commitment tx'' using the payment preimage if known
+* the ''HTLC-timeout tx'' if B publishes them
 
+<ol start="4" style="list-style-type: decimal;">
+<li>''B's offered HTLCs'': The node MUST ''resolve'' this in one of two ways by spending:</li></ol>
 
-The node MAY use a single transaction to *resolve* all the outputs, but MUST handle its transactions being invalidated by HTLC transactions.
+* the ''commitment tx'' using the payment revocation
+* the ''commitment tx'' once the HTLC timeout has passed.
 
+<ol start="5" style="list-style-type: decimal;">
+<li>''B's HTLC-timeout transaction'': The node MUST ''resolve'' this by spending using the revocation key.</li>
+<li>''B's HTLC-success transaction'': The node MUST ''resolve'' this by spending using the revocation key. The node SHOULD extract the payment preimage from the transaction input witness if not already known.</li></ol>
 
-## Rationale
+The node MAY use a single transaction to ''resolve'' all the outputs, but MUST handle its transactions being invalidated by HTLC transactions.
 
+== Rationale ==
 
-A single transaction which resolves all the outputs will be under the
-standard size limit thanks to the 511 HTLC-per-party limit (see
-[BOLT #2](bip-0202.mediawiki#the-open_channel-message)).
+A single transaction which resolves all the outputs will be under the standard size limit thanks to the 511 HTLC-per-party limit (see [[bip-0202.mediawiki#the-open_channel-message|BOLT #2]]).
 
-Note that if a single transaction is used, it may be invalidated as B
-broadcasts HTLC-timeout and HTLC-success transactions, but the
-requirement that we persist until all outputs are irrevocably resolved
-should cover this. [FIXME: May have to divide and conquer here, since they may be able to delay us long enough to avoid successful penalty spend? ]
+Note that if a single transaction is used, it may be invalidated as B broadcasts HTLC-timeout and HTLC-success transactions, but the requirement that we persist until all outputs are irrevocably resolved should cover this. [FIXME: May have to divide and conquer here, since they may be able to delay us long enough to avoid successful penalty spend? ]
 
-## Penalty Transactions Weight Calculation
+== Penalty Transactions Weight Calculation ==
 
-There are three different scripts for penalty transactions, with the following witnesses weight (details of the computation in [Appendix A](#appendix-a-expected-weights)):
+There are three different scripts for penalty transactions, with the following witnesses weight (details of the computation in [[#appendix-a-expected-weights|Appendix A]]):
 
-    to_local_penalty_witness: 154 bytes
-    offered_htlc_penalty_witness: 243 bytes
-    accepted_htlc_penalty_witness: 249 bytes
-
+<pre>to_local_penalty_witness: 154 bytes
+offered_htlc_penalty_witness: 243 bytes
+accepted_htlc_penalty_witness: 249 bytes</pre>
 The penalty txinput itself takes 41 bytes, thus has a weight of 164, making the weight of each input:
 
-    to_local_penalty_input_weight: 318 bytes
-    offered_htlc_penalty_input_weight: 407 bytes
-    accepted_htlc_penalty_input_weight: 413 bytes
+<pre>to_local_penalty_input_weight: 318 bytes
+offered_htlc_penalty_input_weight: 407 bytes
+accepted_htlc_penalty_input_weight: 413 bytes</pre>
+The rest of the penalty transaction takes 4+3+1+8+1+34+4=55 bytes assuming it has a pay-to-witness-script-hash (the largest standard output script).
 
-The rest of the penalty transaction takes 4+3+1+8+1+34+4=55 bytes
-assuming it has a pay-to-witness-script-hash (the largest standard
-output script).
-
-In a worst case scenario, we have only incoming HTLCs and the HTLC-timeout transactions are not published, forcing
-us to spend from the commitment transaction.
+In a worst case scenario, we have only incoming HTLCs and the HTLC-timeout transactions are not published, forcing us to spend from the commitment transaction.
 
 With a maximum standard weight of 400000:
- 
-    max_num_htlcs = (400000 - 318 - 55) / 413  = 967
- 
-Thus we could allow 483 HTLCs in each direction (with one `to_local` output) and still resolve it with a single penalty
-transaction.
 
-# General Requirements
+<pre>max_num_htlcs = (400000 - 318 - 55) / 413  = 967</pre>
+Thus we could allow 483 HTLCs in each direction (with one <code>to_local</code> output) and still resolve it with a single penalty transaction.
 
+= General Requirements =
 
-A node SHOULD report an error to the operator if it sees a transaction
-spend the funding transaction output which does not fall into one of
-these categories (mutual close, unilateral close, or revoked
-transaction close).  Such a transaction implies its private key has
-leaked, and funds may be lost.
+A node SHOULD report an error to the operator if it sees a transaction spend the funding transaction output which does not fall into one of these categories (mutual close, unilateral close, or revoked transaction close). Such a transaction implies its private key has leaked, and funds may be lost.
 
+A node MAY simply watch the contents of the most-work chain for transactions, or MAY watch for (valid) broadcast transactions a.k.a mempool. Considering mempool transactions should cause lower latency for HTLC redemption, but on-chain HTLCs should be such an unusual case that speed cannot be considered critical.
 
-A node MAY simply watch the contents of the most-work chain for
-transactions, or MAY watch for (valid) broadcast transactions a.k.a
-mempool.  Considering mempool transactions should cause lower latency
-for HTLC redemption, but on-chain HTLCs should be such an unusual case
-that speed cannot be considered critical.
+= Appendix A: Expected weights =
 
-# Appendix A: Expected weights
+== Expected weight of the <code>to_local</code> penalty transaction witness ==
 
-## Expected weight of the `to_local` penalty transaction witness
+As described in [[bip-0203.mediawiki|BOLT #3]], the witness for this transaction is:
 
-As described in [BOLT #3](bip-0203.mediawiki), the witness for
-this transaction is:
+<pre>&lt;sig&gt; 1 { OP_IF &lt;key&gt; OP_ELSE to_self_delay OP_CSV OP_DROP &lt;key&gt; OP_ENDIF OP_CHECKSIG }</pre>
+The ''expected weight'' is calculated as follows:
 
-    <sig> 1 { OP_IF <key> OP_ELSE to_self_delay OP_CSV OP_DROP <key> OP_ENDIF OP_CHECKSIG }
-
-The *expected weight* is calculated as follows:
-
-    to_local_script: 77 bytes
-        - OP_IF: 1 byte
-        - OP_DATA: 1 byte (revocationkey length)
-		- revocationkey: 33 bytes
-		- OP_ELSE: 1 byte
-		- OP_DATA: 1 byte (delay length)
-		- delay: 2 bytes
-		- OP_CSV: 1 byte
-		- OP_DROP: 1 byte
-		- OP_DATA: 1 byte (localkey length)
-		- localkey: 33 bytes
-		- OP_ENDIF: 1 byte
-		- OP_CHECKSIG: 1 byte
-		
-    to_local_penalty_witness: 154 bytes
-        - number_of_witness_elements: 1 byte
-        - revocation_sig_length: 1 byte
-        - revocation_sig: 73 bytes
-        - one_length: 1 byte
-        - witness_script_length: 1 byte
-        - witness_script (to_local_script)
+<pre>to_local_script: 77 bytes
+    - OP_IF: 1 byte
+    - OP_DATA: 1 byte (revocationkey length)
+    - revocationkey: 33 bytes
+    - OP_ELSE: 1 byte
+    - OP_DATA: 1 byte (delay length)
+    - delay: 2 bytes
+    - OP_CSV: 1 byte
+    - OP_DROP: 1 byte
+    - OP_DATA: 1 byte (localkey length)
+    - localkey: 33 bytes
+    - OP_ENDIF: 1 byte
+    - OP_CHECKSIG: 1 byte
     
+to_local_penalty_witness: 154 bytes
+    - number_of_witness_elements: 1 byte
+    - revocation_sig_length: 1 byte
+    - revocation_sig: 73 bytes
+    - one_length: 1 byte
+    - witness_script_length: 1 byte
+    - witness_script (to_local_script)</pre>
+== Expected weight of the offered-htlc penalty transaction witness ==
+
+The ''expected weight'' is calculated as follows (some calculations have already been made in [[bip-0203.mediawiki|BOLT #3]]):
+
+<pre>offered_htlc_script: 133 bytes
     
-## Expected weight of the offered-htlc penalty transaction witness
+offered_htlc_penalty_witness: 243 bytes
+    - number_of_witness_elements: 1 byte
+    - revocation_sig_length: 1 byte
+    - revocation_sig: 73 bytes
+    - revocation_key_length: 1 byte
+    - revocation_key: 33 bytes
+    - witness_script_length: 1 byte
+    - witness_script (offered_htlc_script)</pre>
+== Expected weight of the received-htlc penalty transaction witness ==
 
-The *expected weight* is calculated as follows (some calculations have already been made in [BOLT #3](bip-0203.mediawiki)):
+The ''expected weight'' is calculated as follows (some calculations have already been made in [[bip-0203.mediawiki|BOLT #3]]):
 
-    offered_htlc_script: 133 bytes
-		
-    offered_htlc_penalty_witness: 243 bytes
-        - number_of_witness_elements: 1 byte
-        - revocation_sig_length: 1 byte
-        - revocation_sig: 73 bytes
-        - revocation_key_length: 1 byte
-        - revocation_key: 33 bytes
-        - witness_script_length: 1 byte
-        - witness_script (offered_htlc_script)
-
-      
-## Expected weight of the received-htlc penalty transaction witness
-
-The *expected weight* is calculated as follows (some calculations have already been made in [BOLT #3](bip-0203.mediawiki)):
-
-    accepted_htlc_script: 139 bytes
-		
-    accepted_htlc_penalty_witness: 249 bytes
-        - number_of_witness_elements: 1 byte
-        - revocation_sig_length: 1 byte
-        - revocation_sig: 73 bytes
-        - revocation_key_length: 1 byte
-        - revocation_key: 33 bytes
-        - witness_script_length: 1 byte
-        - witness_script (accepted_htlc_script)
-            
-# Authors
+<pre>accepted_htlc_script: 139 bytes
+    
+accepted_htlc_penalty_witness: 249 bytes
+    - number_of_witness_elements: 1 byte
+    - revocation_sig_length: 1 byte
+    - revocation_sig: 73 bytes
+    - revocation_key_length: 1 byte
+    - revocation_key: 33 bytes
+    - witness_script_length: 1 byte
+    - witness_script (accepted_htlc_script)
+        </pre>
+= Authors =
 
 FIXME
 
-![Creative Commons License](https://i.creativecommons.org/l/by/4.0/88x31.png "License CC-BY")
-<br>
-This work is licensed under a [Creative Commons Attribution 4.0 International License](http://creativecommons.org/licenses/by/4.0/).
+[[File:https://i.creativecommons.org/l/by/4.0/88x31.png|License CC-BY]] <br> This work is licensed under a [http://creativecommons.org/licenses/by/4.0/ Creative Commons Attribution 4.0 International License].
+
